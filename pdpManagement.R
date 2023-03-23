@@ -1,16 +1,16 @@
 # ---------------------------------------------------------------------------------------
 # Description
 # This R Script is to perform these tasks:
-# Delete users' memberships from certain groups
-# Add users to certain groups
+  # Delete PDP policies from certain datasets
+  # Add policies to certain datasets
+  # Update policies on certain datasets
 # ---------------------------------------------------------------------------------------
 library(tidyverse)
 library(rdomo)
 library(data.table)
 library(rlist)
-domo <- Domo(client_id='client_id', secret='secret')
+amlrs_domo <- Domo(client_id='e4f0cc6d-3d15-4e13-a270-1bb0a5973e40', secret='68971f2478e0f2e1772917351f10d144e55d24db4ff36fbe366c956cc8e5cdf4')
 # ---------------------------------------------------------------------------------------
-
 
 # Functions
 `%!in%` <- Negate(`%in%`)
@@ -44,22 +44,22 @@ reorderPdp <- function(x) {
   z <- bind_rows(z)
 }
 createPdpList <- function(x){
-  if('Policy ID' %in% colnames(x)){id <- as.integer(x$`Policy ID`)} else{id <- NULL}
-  filters <- list()
-  users <- list()
-  longFilters <- x$`Policy Value` %>% strsplit('|', fixed = TRUE) %>% unlist()
-  longUsers <- x$`User ID` %>% strsplit('|', fixed = TRUE) %>% unlist()
-  for (i in 1:length(longFilters)) {filters[[i]] <- list(column = x$`Policy Column`, values = list(longFilters[i]), operator = 'EQUALS', not = FALSE) } # Create Filters
-  for (i in 1:length(longUsers)) {users[[i]] <- as.integer(longUsers) } # Create Users
-  pdpList <- list(id = id, type = 'user', name = x$`Policy Name`, filters = filters, users = users, virtualUsers = list(), groups = list())
-  if('Policy ID' %!in% colnames(x)){pdpList$id <- NULL}
-  return(pdpList)
+    if('Policy ID' %in% colnames(x)){id <- as.integer(x$`Policy ID`)} else{id <- NULL}
+    filters <- list()
+    users <- list()
+    longFilters <- x$`Policy Value` %>% strsplit('|', fixed = TRUE) %>% unlist()
+    longUsers <- x$`User ID` %>% strsplit('|', fixed = TRUE) %>% unlist()
+    for (i in 1:length(longFilters)) {filters[[i]] <- list(column = x$`Policy Column`, values = list(longFilters[i]), operator = 'EQUALS', not = FALSE) } # Create Filters
+    for (i in 1:length(longUsers)) {users[[i]] <- as.integer(longUsers) } # Create Users
+    pdpList <- list(id = id, type = 'user', name = x$`Policy Name`, filters = filters, users = users, virtualUsers = list(), groups = list())
+    if('Policy ID' %!in% colnames(x)){pdpList$id <- NULL}
+    return(pdpList)
 }
 
 # ---------------------------------------------------------------------------------------
 
 # Data
-pdpData <- domo$ds_query('datasetID', "select `Dataset ID`, `Policy Name`, `Policy Column`, `User ID`, `Policy Value` from table")
+pdpData <- amlrs_domo$ds_query('e1872c03-b644-487d-83ce-88f04273be8d', "select `Dataset ID`, `Policy Name`, `Policy Column`, `User ID`, `Policy Value` from table")
 pdpDs <- pdpData %>% select(`Dataset ID`, `Policy Column`) %>% unique()
 
 # ---------------------------------------------------------------------------------------
@@ -71,14 +71,14 @@ for (a in 1:nrow(pdpDs)) {
     polColumn <- pdpDs$`Policy Column`[a]
     
     # Current PDP List
-    curPolicy <- domo$pdp_list(ds = dsID)
+    curPolicy <- amlrs_domo$pdp_list(ds = dsID)
     curPolicy <- extractPdp(curPolicy) %>% filter(`Policy Name` %!like% 'AA - Restricted' & `Policy Name` != 'All Rows')
     
     # IF NO current policies found on the dataset
     if(nrow(curPolicy) == 0){
       # ADD POLICIES
       emptData <- pdpData %>% filter(`Dataset ID` == dsID)
-      for (i in 1:nrow(emptData)) {if(nrow(emptData) == 0) {break} else{domo$pdp_create(ds = dsID, policy_def = createPdpList(emptData[i,]))} }
+      for (i in 1:nrow(emptData)) {if(nrow(emptData) == 0) {break} else{amlrs_domo$pdp_create(ds = dsID, policy_def = createPdpList(emptData[i,]))} }
     } 
     else{
       # Correct PDP List
@@ -92,19 +92,18 @@ for (a in 1:nrow(pdpDs)) {
       updList <- left_join(updList, corPolicy)
       
       # DELETE POLICIES
-      for (i in 1:nrow(delList)) { if(nrow(delList) == 0) {break} else{domo$pdp_delete(ds = dsID, policy = delList$`Policy ID`[i])} }
+      for (i in 1:nrow(delList)) { if(nrow(delList) == 0) {break} else{amlrs_domo$pdp_delete(ds = dsID, policy = delList$`Policy ID`[i])} }
       
       # ADD POLICIES
-      for (i in 1:nrow(addList)) { if(nrow(addList) == 0) {break} else{domo$pdp_create(ds = dsID, policy_def = createPdpList(addList[i,]))} }
+      for (i in 1:nrow(addList)) { if(nrow(addList) == 0) {break} else{amlrs_domo$pdp_create(ds = dsID, policy_def = createPdpList(addList[i,]))} }
       
       # UPDATE POLICIES
-      for (i in 1:nrow(updList)) { if(nrow(updList) == 0) {break} else{domo$pdp_update(ds = dsID, policy = updList$`Policy ID`[i], policy_def = createPdpList(updList[i,]))} }
+      for (i in 1:nrow(updList)) { if(nrow(updList) == 0) {break} else{amlrs_domo$pdp_update(ds = dsID, policy = updList$`Policy ID`[i], policy_def = createPdpList(updList[i,]))} }
+      }
     }
-  }
 }
 
 # ---------------------------------------------------------------------------------------
 
 # Record Log
-domo$ds_update("datasetID", tibble(Operation = 'PDP Management', Time = Sys.time(), Status = 'Successful'))
-
+amlrs_domo$ds_update("a90f97f0-b0db-40a3-8909-95fac3f44e37", tibble(Operation = 'PDP Management', Time = Sys.time(), Status = 'Successful'))
